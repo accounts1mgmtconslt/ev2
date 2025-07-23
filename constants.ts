@@ -37,8 +37,8 @@ export const HALF_DAY_HOURS = 4;
 
 export const QUICK_REASONS: { label: string; value: string; creditHours?: number }[] = [
     { label: 'Out of Office', value: 'Out of Office', creditHours: FULL_DAY_HOURS },
-    { label: 'Sick Leave', value: 'Sick Leave' },
-    { label: 'Approved Leave', value: 'Approved Leave' },
-    { label: 'Client Meeting', value: 'Client Meeting' },
+    { label: 'Sick Leave', value: 'Sick Leave', creditHours: FULL_DAY_HOURS },
+    { label: 'Approved Leave', value: 'Approved Leave', creditHours: FULL_DAY_HOURS },
+    { label: 'Client Meeting', value: 'Client Meeting', creditHours: FULL_DAY_HOURS },
     { label: 'Forgot to Punch Out', value: 'Forgot to Punch Out' },
 ];

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AttendanceRecord, RecordUpdatePayload } from '../types';
-import { QUICK_REASONS } from '../constants';
+import { QUICK_REASONS, FULL_DAY_HOURS } from '../constants';
 
 interface EditRecordModalProps {
   record: AttendanceRecord | null;
@@ -12,21 +12,31 @@ interface EditRecordModalProps {
 const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, onClose, onSave }) => {
   const [reason, setReason] = useState('');
   const [creditHours, setCreditHours] = useState<number | undefined>(undefined);
+  const [selectedAction, setSelectedAction] = useState('');
 
   useEffect(() => {
     if (record) {
       setReason(record.reason || '');
-      // Reset credit hours unless a quick reason implies it
       setCreditHours(undefined);
+      setSelectedAction('');
     }
   }, [record]);
 
   if (!record) return null;
 
-  const handleQuickReasonSelect = (qr: typeof QUICK_REASONS[0]) => {
-    setReason(qr.value);
-    setCreditHours(qr.creditHours);
-  }
+  const handleActionChange = (action: string) => {
+    setSelectedAction(action);
+    if (action === 'other') {
+      setReason('');
+      setCreditHours(undefined);
+    } else if (action) {
+      const quickReason = QUICK_REASONS.find(qr => qr.value === action);
+      if (quickReason) {
+        setReason(quickReason.value);
+        setCreditHours(quickReason.creditHours);
+      }
+    }
+  };
 
   const handleSave = () => {
     onSave({
@@ -53,6 +63,22 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, onClose, onSa
                 <p><span className="font-semibold">Status:</span> {record.status}</p>
             </div>
             <div>
+              <label htmlFor="action-select" className="block text-sm font-medium text-slate-700">Action</label>
+              <select
+                id="action-select"
+                value={selectedAction}
+                onChange={(e) => handleActionChange(e.target.value)}
+                className="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+              >
+                <option value="">Select an action...</option>
+                {QUICK_REASONS.map(qr => (
+                  <option key={qr.value} value={qr.value}>{qr.label}</option>
+                ))}
+                <option value="other">Other (specify reason)</option>
+              </select>
+            </div>
+            {(selectedAction === 'other' || selectedAction === '') && (
+            <div>
               <label htmlFor="reason" className="block text-sm font-medium text-slate-700">Reason / Note</label>
               <textarea
                 id="reason"
@@ -61,28 +87,26 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, onClose, onSa
                 value={reason}
                 onChange={(e) => {
                   setReason(e.target.value);
-                  setCreditHours(undefined); // Manual typing resets credit hours
+                  setCreditHours(undefined);
                 }}
                 placeholder="e.g., Client meeting ran late, Approved leave, etc."
               />
             </div>
-            <div>
-              <p className="block text-sm font-medium text-slate-700 mb-2">Quick Reasons</p>
-              <div className="flex flex-wrap gap-2">
-                {QUICK_REASONS.map(qr => (
-                  <button 
-                    key={qr.label}
-                    onClick={() => handleQuickReasonSelect(qr)}
-                    className="px-3 py-1 text-sm border border-slate-300 rounded-full hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    {qr.label}
-                  </button>
-                ))}
+            )}
+            {creditHours !== undefined && (
+              <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                <p className="text-sm text-green-700">
+                  <span className="font-semibold">Credit Hours:</span> {creditHours} hours will be credited for this day.
+                </p>
               </div>
-              {creditHours !== undefined && (
-                <p className="text-xs text-green-600 mt-2">Note: This selection will credit {creditHours} hours for this day.</p>
-              )}
-            </div>
+            )}
+            {selectedAction && selectedAction !== 'other' && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-700">
+                  <span className="font-semibold">Selected:</span> {selectedAction}
+                </p>
+              </div>
+            )}
         </div>
         <div className="mt-6 flex justify-end space-x-3">
           <button onClick={onClose} className="px-4 py-2 bg-slate-200 text-slate-800 rounded-md hover:bg-slate-300">

@@ -122,15 +122,15 @@ export const generateSummaryStats = (records: AttendanceRecord[]): Stat[] => {
 
 
 const EXCEL_STATUS_FILLS: Record<AttendanceStatus, string> = {
-    [AttendanceStatus.PRESENT]: "dcfce7",
-    [AttendanceStatus.ABSENT]: "fee2e2",
-    [AttendanceStatus.HALF_DAY]: "fef9c3",
-    [AttendanceStatus.SHORT_HOURS]: "fef3c7",
-    [AttendanceStatus.WEEKEND]: "e2e8f0",
-    [AttendanceStatus.HOLIDAY]: "e0f2fe",
-    [AttendanceStatus.WORK_ON_HOLIDAY]: "e9d5ff",
-    [AttendanceStatus.WORK_ON_WEEKEND]: "e0e7ff",
-    [AttendanceStatus.UNKNOWN]: "f3f4f6",
+    [AttendanceStatus.PRESENT]: "dcfce7",        // Light green
+    [AttendanceStatus.ABSENT]: "fecaca",         // Light red
+    [AttendanceStatus.HALF_DAY]: "fef08a",       // Light yellow
+    [AttendanceStatus.SHORT_HOURS]: "fed7aa",    // Light orange
+    [AttendanceStatus.WEEKEND]: "e2e8f0",        // Light gray
+    [AttendanceStatus.HOLIDAY]: "bfdbfe",        // Light blue
+    [AttendanceStatus.WORK_ON_HOLIDAY]: "ddd6fe", // Light purple
+    [AttendanceStatus.WORK_ON_WEEKEND]: "c7d2fe", // Light indigo
+    [AttendanceStatus.UNKNOWN]: "f3f4f6",        // Very light gray
 };
 
 export const exportToExcel = (records: AttendanceRecord[], summary: Stat[], employeeName: string, dateRange: {start: Date, end: Date}) => {
@@ -159,14 +159,24 @@ export const exportToExcel = (records: AttendanceRecord[], summary: Stat[], empl
         OutTime: r.outTime || '-',
         TotalHours: r.totalHours || '0:00',
         Status: r.status,
-        Reason: r.reason || '-',
+        'Reason / Note': r.reason || '-',
     }));
 
     const reportWs = XLSX.utils.json_to_sheet(reportData, { header: headers });
-    reportWs['!cols'] = [ { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 18 }, { wch: 40 } ];
+    reportWs['!cols'] = [ { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 18 }, { wch: 50 } ];
 
     // Style headers
-    const headerStyle = { font: { bold: true }, fill: { fgColor: { rgb: "d1d5db" } }, alignment: { horizontal: 'center' } };
+    const headerStyle = { 
+        font: { bold: true, color: { rgb: "000000" } }, 
+        fill: { fgColor: { rgb: "9ca3af" } }, 
+        alignment: { horizontal: 'center' },
+        border: {
+            top: { style: 'thin', color: { rgb: "000000" } },
+            bottom: { style: 'thin', color: { rgb: "000000" } },
+            left: { style: 'thin', color: { rgb: "000000" } },
+            right: { style: 'thin', color: { rgb: "000000" } }
+        }
+    };
     for (let C = 0; C < headers.length; ++C) {
         const cellAddress = XLSX.utils.encode_cell({c: C, r: 0});
         reportWs[cellAddress].s = headerStyle;
@@ -176,7 +186,15 @@ export const exportToExcel = (records: AttendanceRecord[], summary: Stat[], empl
     records.forEach((record, index) => {
         const rowNum = index + 1; // 0-indexed data, +1 for header
         const fillColor = EXCEL_STATUS_FILLS[record.status];
-        const rowStyle = { fill: { fgColor: { rgb: fillColor } } };
+        const rowStyle = { 
+            fill: { fgColor: { rgb: fillColor } },
+            border: {
+                top: { style: 'thin', color: { rgb: "d1d5db" } },
+                bottom: { style: 'thin', color: { rgb: "d1d5db" } },
+                left: { style: 'thin', color: { rgb: "d1d5db" } },
+                right: { style: 'thin', color: { rgb: "d1d5db" } }
+            }
+        };
         for (let C = 0; C < headers.length; ++C) {
             const cellAddress = XLSX.utils.encode_cell({c: C, r: rowNum});
             if (!reportWs[cellAddress]) continue;
