@@ -6,8 +6,6 @@ if (!process.env.API_KEY) {
   console.warn("API_KEY environment variable not set. Gemini AI features will be disabled.");
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
-
 export interface AIEnhancement {
     date: string; // YYYY-MM-DD
     suggestedStatus: string;
@@ -43,6 +41,8 @@ export const enhanceWithAI = async (recordsToAnalyze: AttendanceRecord[], employ
     if (recordsToAnalyze.length === 0) {
         return [];
     }
+    
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
     
     const simplifiedRecords = recordsToAnalyze.map(r => ({
         date: r.date.toISOString().split('T')[0],
