@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "react": "^19.1.0",
-    "react-dom/client": "18.2.0",
     "@google/genai": "^1.10.0",
     "papaparse": "5.3.2",
     "xlsx": "0.18.5",
