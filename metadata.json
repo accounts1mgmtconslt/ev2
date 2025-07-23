@@ -1,0 +1,6 @@
+{
+  "name": "Employee Attendance Tracker v2",
+  "description": "A client-side web application to parse, analyze, and report on employee attendance data from a CSV file. It transforms raw attendance logs into an interactive, insightful report with optional AI-powered analysis.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
