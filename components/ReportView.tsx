@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { EmployeeData, AttendanceRecord, Stat, RecordUpdatePayload, Holiday } from '../types';
-import { STATUS_COLORS } from '../constants';
+import { EmployeeData, AttendanceRecord, Stat, RecordUpdatePayload, Holiday, AttendanceStatus } from '../types';
+import { STATUS_COLORS, QUICK_REASONS } from '../constants';
 import { EditIcon, MagicIcon, ExcelIcon, ExclamationTriangleIcon } from './icons/Icon';
 import { generateSummaryStats, exportToExcel } from '../services/reportService';
 import EditRecordModal from './EditRecordModal';
@@ -21,11 +21,53 @@ const StatCard: React.FC<{ stat: Stat }> = ({ stat }) => (
     </div>
 );
 
+const QuickActionModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (reason: string) => void;
+}> = ({ isOpen, onClose, onSave }) => {
+  const [reason, setReason] = useState('');
+
+  if (!isOpen) return null;
+
+  const handleSave = () => {
+    onSave(reason);
+    setReason('');
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+        <h3 className="text-lg font-bold text-slate-800 mb-4">Enter Reason</h3>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="e.g., Driving class, Doctor appointment, etc."
+          className="w-full p-3 border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          rows={3}
+        />
+        <div className="mt-4 flex justify-end space-x-3">
+          <button onClick={onClose} className="px-4 py-2 bg-slate-200 text-slate-800 rounded-md hover:bg-slate-300">
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={!reason.trim()} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-indigo-300">
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const ReportView: React.FC<ReportViewProps> = ({ data, onRecordUpdate, onHolidaysUpdate, holidays }) => {
     const [selectedEmployee, setSelectedEmployee] = useState<string>('All');
+    const [selectedDate, setSelectedDate] = useState<string>('');
     const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
     const [isHolidayManagerOpen, setIsHolidayManagerOpen] = useState(false);
+    const [isSummaryCollapsed, setIsSummaryCollapsed] = useState(false);
+    const [showQuickActionModal, setShowQuickActionModal] = useState(false);
+    const [pendingAction, setPendingAction] = useState<{ recordId: string; action: string } | null>(null);
 
     const fullDateRange = useMemo(() => {
         const allDates = data?.flatMap(e => e.records.map(r => new Date(r.date).getTime())).filter(t => !isNaN(t));
@@ -48,6 +90,28 @@ const ReportView: React.FC<ReportViewProps> = ({ data, onRecordUpdate, onHoliday
         setFilterEndDate(fullDateRange.end);
     }, [fullDateRange]);
     
+    const uniqueDates = useMemo(() => {
+        if (selectedEmployee !== 'All') return [];
+        
+        const dates = new Set<string>();
+        data.forEach(emp => {
+            emp.records.forEach(rec => {
+                const recTime = new Date(rec.date).setHours(0, 0, 0, 0);
+                const startTime = new Date(filterStartDate).setHours(0, 0, 0, 0);
+                const endTime = new Date(filterEndDate).setHours(0, 0, 0, 0);
+                if (recTime >= startTime && recTime <= endTime) {
+                    dates.add(rec.date.toISOString().split('T')[0]);
+                }
+            });
+        });
+        
+        const sortedDates = Array.from(dates).sort();
+        if (sortedDates.length > 0 && !selectedDate) {
+            setSelectedDate(sortedDates[0]);
+        }
+        return sortedDates;
+    }, [data, selectedEmployee, filterStartDate, filterEndDate, selectedDate]);
+    
     const filteredData = useMemo(() => {
         if (!filterStartDate || isNaN(filterStartDate.getTime()) || !filterEndDate || isNaN(filterEndDate.getTime())) return [];
 
@@ -63,12 +127,16 @@ const ReportView: React.FC<ReportViewProps> = ({ data, onRecordUpdate, onHoliday
             .map(emp => {
                 const records = emp.records.filter(rec => {
                     const recTime = new Date(rec.date).setHours(0, 0, 0, 0);
-                    return recTime >= startTime && recTime <= endTime;
+                    const dateMatches = recTime >= startTime && recTime <= endTime;
+                    if (selectedEmployee === 'All' && selectedDate) {
+                        return dateMatches && rec.date.toISOString().split('T')[0] === selectedDate;
+                    }
+                    return dateMatches;
                 });
                 return { ...emp, records };
             })
             .filter(emp => selectedEmployee === 'All' || emp.employeeName === selectedEmployee);
-    }, [data, selectedEmployee, filterStartDate, filterEndDate]);
+    }, [data, selectedEmployee, filterStartDate, filterEndDate, selectedDate]);
 
     const recordsToShow = useMemo(() => {
        if (selectedEmployee === 'All') {
@@ -86,6 +154,41 @@ const ReportView: React.FC<ReportViewProps> = ({ data, onRecordUpdate, onHoliday
         if (selectedEmployee === 'All') return [];
         return generateSummaryStats(recordsToShow);
     }, [recordsToShow, selectedEmployee]);
+
+    const handleQuickAction = (recordId: string, action: string) => {
+        const quickReason = QUICK_REASONS.find(qr => qr.value === action);
+        if (quickReason) {
+            onRecordUpdate({
+                recordId,
+                updates: {
+                    reason: quickReason.value,
+                    creditHours: quickReason.creditHours
+                }
+            });
+        } else if (action === 'other') {
+            setPendingAction({ recordId, action });
+            setShowQuickActionModal(true);
+        }
+    };
+
+    const handleQuickActionModalSave = (reason: string) => {
+        if (pendingAction) {
+            // Check if the reason matches any predefined actions
+            const matchingAction = QUICK_REASONS.find(qr => 
+                qr.value.toLowerCase() === reason.toLowerCase() || 
+                (reason.toLowerCase().includes('driving') && qr.value === 'Client Meeting')
+            );
+            
+            onRecordUpdate({
+                recordId: pendingAction.recordId,
+                updates: {
+                    reason,
+                    creditHours: matchingAction?.creditHours
+                }
+            });
+        }
+        setPendingAction(null);
+    };
 
     const handleExport = () => {
       if (selectedEmployee === 'All') {
@@ -109,7 +212,10 @@ const ReportView: React.FC<ReportViewProps> = ({ data, onRecordUpdate, onHoliday
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                     <div>
                         <label htmlFor="employee-select" className="block text-sm font-medium text-slate-700">Employee</label>
-                        <select id="employee-select" value={selectedEmployee} onChange={e => setSelectedEmployee(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                        <select id="employee-select" value={selectedEmployee} onChange={e => {
+                            setSelectedEmployee(e.target.value);
+                            setSelectedDate('');
+                        }} className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
                             <option>All</option>
                             {data.map(emp => <option key={emp.employeeName}>{emp.employeeName}</option>)}
                         </select>
@@ -139,7 +245,45 @@ const ReportView: React.FC<ReportViewProps> = ({ data, onRecordUpdate, onHoliday
             </div>
 
             {selectedEmployee === 'All' ? (
-                <AllEmployeesSummary data={filteredData} />
+                <>
+                    <AllEmployeesSummary 
+                        data={data.map(emp => ({
+                            ...emp,
+                            records: emp.records.filter(rec => {
+                                const recTime = new Date(rec.date).setHours(0, 0, 0, 0);
+                                const startTime = new Date(filterStartDate).setHours(0, 0, 0, 0);
+                                const endTime = new Date(filterEndDate).setHours(0, 0, 0, 0);
+                                return recTime >= startTime && recTime <= endTime;
+                            })
+                        }))} 
+                        isCollapsed={isSummaryCollapsed}
+                        onToggle={() => setIsSummaryCollapsed(!isSummaryCollapsed)}
+                    />
+                    
+                    {uniqueDates.length > 0 && (
+                        <div className="bg-white p-4 rounded-lg shadow-md">
+                            <h3 className="text-lg font-semibold text-slate-800 mb-4">Select Date</h3>
+                            <div className="flex flex-wrap gap-2">
+                                {uniqueDates.map(date => (
+                                    <button
+                                        key={date}
+                                        onClick={() => setSelectedDate(date)}
+                                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                                            selectedDate === date
+                                                ? 'bg-indigo-600 text-white'
+                                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                        }`}
+                                    >
+                                        {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { 
+                                            month: 'short', 
+                                            day: 'numeric' 
+                                        })}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </>
             ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                     {summaryStats.map(stat => <StatCard key={stat.label} stat={stat} />)}
@@ -162,6 +306,7 @@ const ReportView: React.FC<ReportViewProps> = ({ data, onRecordUpdate, onHoliday
                 <tbody className="bg-white divide-y divide-slate-200">
                     {recordsToShow.map(record => {
                         const missedPunch = (record.inTime && !record.outTime) || (!record.inTime && record.outTime && record.workHoursDecimal > 0);
+                        const canEdit = [AttendanceStatus.ABSENT, AttendanceStatus.HALF_DAY, AttendanceStatus.SHORT_HOURS].includes(record.status);
                         return (
                         <tr key={record.id} className={STATUS_COLORS[record.status].split(' ')[0]}>
                             <td className="px-4 py-3 whitespace-nowrap text-sm">
@@ -183,7 +328,24 @@ const ReportView: React.FC<ReportViewProps> = ({ data, onRecordUpdate, onHoliday
                                 {record.isAiEnhanced && <MagicIcon/>} <span className="truncate">{record.reason}</span>
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm">
-                                <button onClick={() => setEditingRecord(record)} className="text-indigo-600 hover:text-indigo-900"><EditIcon/></button>
+                                {canEdit ? (
+                                    <div className="flex items-center gap-2">
+                                        <select
+                                            onChange={(e) => handleQuickAction(record.id, e.target.value)}
+                                            className="text-xs border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                            defaultValue=""
+                                        >
+                                            <option value="">Select Action</option>
+                                            {QUICK_REASONS.map(qr => (
+                                                <option key={qr.value} value={qr.value}>{qr.label}</option>
+                                            ))}
+                                            <option value="other">Other</option>
+                                        </select>
+                                        <button onClick={() => setEditingRecord(record)} className="text-indigo-600 hover:text-indigo-900"><EditIcon/></button>
+                                    </div>
+                                ) : (
+                                    <button onClick={() => setEditingRecord(record)} className="text-indigo-600 hover:text-indigo-900"><EditIcon/></button>
+                                )}
                             </td>
                         </tr>
                     )})}
@@ -193,6 +355,14 @@ const ReportView: React.FC<ReportViewProps> = ({ data, onRecordUpdate, onHoliday
 
             {editingRecord && <EditRecordModal record={editingRecord} onClose={() => setEditingRecord(null)} onSave={onRecordUpdate} />}
             {isHolidayManagerOpen && <HolidayManager holidays={holidays} onClose={() => setIsHolidayManagerOpen(false)} onSave={onHolidaysUpdate} dateRange={fullDateRange} />}
+            <QuickActionModal 
+                isOpen={showQuickActionModal} 
+                onClose={() => {
+                    setShowQuickActionModal(false);
+                    setPendingAction(null);
+                }} 
+                onSave={handleQuickActionModalSave} 
+            />
         </div>
     );
 };

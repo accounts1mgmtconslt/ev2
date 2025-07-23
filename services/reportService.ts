@@ -146,23 +146,28 @@ export const exportToExcel = (records: AttendanceRecord[], summary: Stat[], empl
     ];
     const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
     summaryWs['!cols'] = [{ wch: 25 }, { wch: 15 }];
+    
+    // Style summary sheet
+    if (!summaryWs['A1'].s) summaryWs['A1'].s = {};
     summaryWs['A1'].s = { font: { bold: true, sz: 16 }, alignment: { horizontal: 'center' } };
-    XLSX.utils.sheet_add_aoa(summaryWs, [['']], {origin: 'A1'}); // Recalculate merges
     summaryWs['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
     
     // Sheet 2: Detailed Report
     const headers = ['Date', 'Day', 'In Time', 'Out Time', 'Total Hours', 'Status', 'Reason / Note'];
-    const reportData = records.map(r => ({
-        Date: r.date.toLocaleDateString(),
-        Day: r.date.toLocaleDateString('en-US', { weekday: 'long'}),
-        InTime: r.inTime || '-',
-        OutTime: r.outTime || '-',
-        TotalHours: r.totalHours || '0:00',
-        Status: r.status,
-        'Reason / Note': r.reason || '-',
-    }));
+    const reportData = [
+        headers,
+        ...records.map(r => [
+            r.date.toLocaleDateString(),
+            r.date.toLocaleDateString('en-US', { weekday: 'long'}),
+            r.inTime || '-',
+            r.outTime || '-',
+            r.totalHours || '0:00',
+            r.status,
+            r.reason || '-'
+        ])
+    ];
 
-    const reportWs = XLSX.utils.json_to_sheet(reportData, { header: headers });
+    const reportWs = XLSX.utils.aoa_to_sheet(reportData);
     reportWs['!cols'] = [ { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 18 }, { wch: 50 } ];
 
     // Style headers
@@ -179,6 +184,7 @@ export const exportToExcel = (records: AttendanceRecord[], summary: Stat[], empl
     };
     for (let C = 0; C < headers.length; ++C) {
         const cellAddress = XLSX.utils.encode_cell({c: C, r: 0});
+        if (!reportWs[cellAddress]) reportWs[cellAddress] = { v: headers[C], t: 's' };
         reportWs[cellAddress].s = headerStyle;
     }
 
@@ -188,6 +194,7 @@ export const exportToExcel = (records: AttendanceRecord[], summary: Stat[], empl
         const fillColor = EXCEL_STATUS_FILLS[record.status];
         const rowStyle = { 
             fill: { fgColor: { rgb: fillColor } },
+            alignment: { horizontal: 'left', vertical: 'center' },
             border: {
                 top: { style: 'thin', color: { rgb: "d1d5db" } },
                 bottom: { style: 'thin', color: { rgb: "d1d5db" } },
@@ -197,7 +204,10 @@ export const exportToExcel = (records: AttendanceRecord[], summary: Stat[], empl
         };
         for (let C = 0; C < headers.length; ++C) {
             const cellAddress = XLSX.utils.encode_cell({c: C, r: rowNum});
-            if (!reportWs[cellAddress]) continue;
+            if (!reportWs[cellAddress]) {
+                const cellValue = reportData[rowNum][C];
+                reportWs[cellAddress] = { v: cellValue, t: 's' };
+            }
             reportWs[cellAddress].s = rowStyle;
         }
     });
