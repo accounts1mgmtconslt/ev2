@@ -118,71 +118,11 @@ export const generateSummaryStats = (records: AttendanceRecord[]): Stat[] => {
     ];
 };
 
-// Enhanced color scheme with better contrast and visual distinction
-const EXCEL_STATUS_FORMATTING: Record<AttendanceStatus, {
-    fill: string;
-    font: string;
-    border: string;
-    pattern?: 'solid' | 'lightHorizontal' | 'lightVertical' | 'darkHorizontal';
-}> = {
-    [AttendanceStatus.PRESENT]: {
-        fill: "d4edda",        // Light green background
-        font: "155724",        // Dark green text
-        border: "28a745"       // Green border
-    },
-    [AttendanceStatus.ABSENT]: {
-        fill: "f8d7da",        // Light red background
-        font: "721c24",        // Dark red text
-        border: "dc3545"       // Red border
-    },
-    [AttendanceStatus.HALF_DAY]: {
-        fill: "fff3cd",        // Light yellow background
-        font: "856404",        // Dark yellow/brown text
-        border: "ffc107"       // Yellow border
-    },
-    [AttendanceStatus.SHORT_HOURS]: {
-        fill: "ffeaa7",        // Light orange background
-        font: "d63031",        // Dark orange text
-        border: "fd7e14"       // Orange border
-    },
-    [AttendanceStatus.WEEKEND]: {
-        fill: "e9ecef",        // Light gray background
-        font: "495057",        // Dark gray text
-        border: "6c757d"       // Gray border
-    },
-    [AttendanceStatus.HOLIDAY]: {
-        fill: "cce5ff",        // Light blue background
-        font: "004085",        // Dark blue text
-        border: "007bff"       // Blue border
-    },
-    [AttendanceStatus.WORK_ON_HOLIDAY]: {
-        fill: "e2d5f0",        // Light purple background
-        font: "5a2d82",        // Dark purple text
-        border: "6f42c1"       // Purple border
-    },
-    [AttendanceStatus.WORK_ON_WEEKEND]: {
-        fill: "d1c4e9",        // Light indigo background
-        font: "4527a0",        // Dark indigo text
-        border: "673ab7"       // Indigo border
-    },
-    [AttendanceStatus.UNKNOWN]: {
-        fill: "f8f9fa",        // Very light gray background
-        font: "6c757d",        // Medium gray text
-        border: "dee2e6"       // Light gray border
-    }
-};
-
 export const exportToExcel = (records: AttendanceRecord[], summary: Stat[], employeeName: string, dateRange: {start: Date, end: Date}) => {
-    // Create workbook and set properties
+    // Create workbook
     const wb = XLSX.utils.book_new();
-    wb.Props = {
-        Title: `Attendance Report - ${employeeName}`,
-        Subject: "Employee Attendance Report",
-        Author: "Employee Attendance Tracker",
-        CreatedDate: new Date()
-    };
     
-    // Sheet 1: Enhanced Summary with legend
+    // Sheet 1: Summary
     const summaryData = [
         ['Employee Attendance Summary'],
         [],
@@ -190,160 +130,117 @@ export const exportToExcel = (records: AttendanceRecord[], summary: Stat[], empl
         ['Period:', `${dateRange.start.toLocaleDateString()} - ${dateRange.end.toLocaleDateString()}`],
         [],
         ['Metric', 'Value'],
-        ...summary.map(s => [s.label, s.value]),
-        [],
-        ['Color Legend:'],
-        ['Present', 'Light Green Background'],
-        ['Absent', 'Light Red Background'],
-        ['Half Day', 'Light Yellow Background'],
-        ['Short Hours', 'Light Orange Background'],
-        ['Weekend', 'Light Gray Background'],
-        ['Holiday', 'Light Blue Background'],
-        ['Work on Holiday', 'Light Purple Background'],
-        ['Work on Weekend', 'Light Indigo Background']
+        ...summary.map(s => [s.label, s.value])
     ];
     
     const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
-    
-    // Apply summary sheet formatting
-    summaryWs['!cols'] = [{ wch: 25 }, { wch: 20 }];
-    summaryWs['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
-    
-    // Sheet 2: Enhanced Detailed Report
+    summaryWs['!cols'] = [{ wch: 20 }, { wch: 15 }];
+
+    // Sheet 2: Detailed Report with formatting
     const headers = ['Date', 'Day', 'In Time', 'Out Time', 'Total Hours', 'Status', 'Reason / Note'];
-    const reportData = [
-        headers,
-        ...records.map(r => [
-            r.date.toLocaleDateString(),
-            r.date.toLocaleDateString('en-US', { weekday: 'long' }),
-            r.inTime || '-',
-            r.outTime || '-',
-            r.totalHours || '0:00',
-            r.status,
-            r.reason || '-'
-        ])
-    ];
-
-    const reportWs = XLSX.utils.aoa_to_sheet(reportData);
+    const reportWs = XLSX.utils.aoa_to_sheet([headers]);
     
-    // Set column widths for better readability
+    // Set column widths
     reportWs['!cols'] = [
-        { wch: 12 }, { wch: 12 }, { wch: 10 }, 
-        { wch: 10 }, { wch: 12 }, { wch: 18 }, { wch: 50 }
+        { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, 
+        { wch: 12 }, { wch: 18 }, { wch: 40 }
     ];
 
-    // Create a function to apply cell formatting
-    const applyCellStyle = (ws: any, cellRef: string, style: any) => {
-        if (!ws[cellRef]) {
-            ws[cellRef] = { t: 's', v: '' };
-        }
-        ws[cellRef].s = style;
-    };
-
-    // Apply header row formatting with blue background
-    const headerStyle = {
-        font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
-        fill: { fgColor: { rgb: "4472C4" } },
-        alignment: { horizontal: 'center', vertical: 'center' },
-        border: {
-            top: { style: 'thin', color: { rgb: "000000" } },
-            bottom: { style: 'thin', color: { rgb: "000000" } },
-            left: { style: 'thin', color: { rgb: "000000" } },
-            right: { style: 'thin', color: { rgb: "000000" } }
-        }
-    };
-
-    // Apply header formatting to all header cells
-    for (let col = 0; col < headers.length; col++) {
-        const cellRef = XLSX.utils.encode_cell({ c: col, r: 0 });
-        applyCellStyle(reportWs, cellRef, headerStyle);
-    }
-
-    // Apply formatting to data rows based on attendance status
+    // Add data rows with formatting
     records.forEach((record, index) => {
-        const rowNum = index + 1;
-        const formatting = EXCEL_STATUS_FORMATTING[record.status];
-        
-        // Base style for all data cells
-        const baseStyle = {
-            fill: { fgColor: { rgb: formatting.fill } },
-            font: { color: { rgb: formatting.font }, sz: 10 },
-            border: {
-                top: { style: 'thin', color: { rgb: "CCCCCC" } },
-                bottom: { style: 'thin', color: { rgb: "CCCCCC" } },
-                left: { style: 'thin', color: { rgb: "CCCCCC" } },
-                right: { style: 'thin', color: { rgb: "CCCCCC" } }
-            }
-        };
+        const rowIndex = index + 1;
+        const rowData = [
+            record.date.toLocaleDateString(),
+            record.date.toLocaleDateString('en-US', { weekday: 'long' }),
+            record.inTime || '-',
+            record.outTime || '-',
+            record.totalHours || '0:00',
+            record.status,
+            record.reason || '-'
+        ];
 
-        // Special formatting for certain statuses
-        if (record.status === AttendanceStatus.ABSENT) {
-            baseStyle.font.bold = true;
-        }
-        
-        if (record.status === AttendanceStatus.WORK_ON_HOLIDAY || record.status === AttendanceStatus.WORK_ON_WEEKEND) {
-            baseStyle.font.bold = true;
-            baseStyle.border = {
-                top: { style: 'medium', color: { rgb: formatting.border } },
-                bottom: { style: 'medium', color: { rgb: formatting.border } },
-                left: { style: 'medium', color: { rgb: formatting.border } },
-                right: { style: 'medium', color: { rgb: formatting.border } }
-            };
-        }
-        
-
-        // Apply formatting to each cell in the row
-        for (let col = 0; col < headers.length; col++) {
-            const cellRef = XLSX.utils.encode_cell({ c: col, r: rowNum });
-            let cellStyle = { ...baseStyle };
-
-            // Center alignment for most columns, left for reason column
-            if (col === 6) { // Reason/Note column
-                cellStyle.alignment = { horizontal: 'left', vertical: 'center', wrapText: true };
-            } else {
-                cellStyle.alignment = { horizontal: 'center', vertical: 'center' };
-            }
-            
-            // Ensure the cell exists with proper value
-            if (!reportWs[cellRef]) {
-                reportWs[cellRef] = { 
-                    v: reportData[rowNum] ? reportData[rowNum][col] : '', 
-                    t: 's' 
-                };
-            }
-            
-            applyCellStyle(reportWs, cellRef, cellStyle);
-        }
+        // Add row data
+        rowData.forEach((cellValue, colIndex) => {
+            const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: colIndex });
+            reportWs[cellAddress] = { v: cellValue, t: 's' };
+        });
     });
 
-    // Apply summary sheet title formatting
-    if (summaryWs['A1']) {
-        applyCellStyle(summaryWs, 'A1', {
-            font: { bold: true, sz: 16, color: { rgb: "000000" } },
-            alignment: { horizontal: 'center', vertical: 'center' },
-            fill: { fgColor: { rgb: "E6E6E6" } },
-            border: {
-                top: { style: 'thin', color: { rgb: "000000" } },
-                bottom: { style: 'thin', color: { rgb: "000000" } },
-                left: { style: 'thin', color: { rgb: "000000" } },
-                right: { style: 'thin', color: { rgb: "000000" } }
-            }
-        });
+    // Apply formatting based on status
+    const getStatusColor = (status: AttendanceStatus) => {
+        switch (status) {
+            case AttendanceStatus.PRESENT: return { fgColor: { rgb: "D4EDDA" } };
+            case AttendanceStatus.ABSENT: return { fgColor: { rgb: "F8D7DA" } };
+            case AttendanceStatus.HALF_DAY: return { fgColor: { rgb: "FFF3CD" } };
+            case AttendanceStatus.SHORT_HOURS: return { fgColor: { rgb: "FFEAA7" } };
+            case AttendanceStatus.WEEKEND: return { fgColor: { rgb: "E9ECEF" } };
+            case AttendanceStatus.HOLIDAY: return { fgColor: { rgb: "CCE5FF" } };
+            case AttendanceStatus.WORK_ON_HOLIDAY: return { fgColor: { rgb: "E2D5F0" } };
+            case AttendanceStatus.WORK_ON_WEEKEND: return { fgColor: { rgb: "D1C4E9" } };
+            default: return { fgColor: { rgb: "FFFFFF" } };
+        }
+    };
+
+    const getFontColor = (status: AttendanceStatus) => {
+        switch (status) {
+            case AttendanceStatus.PRESENT: return { rgb: "155724" };
+            case AttendanceStatus.ABSENT: return { rgb: "721C24" };
+            case AttendanceStatus.HALF_DAY: return { rgb: "856404" };
+            case AttendanceStatus.SHORT_HOURS: return { rgb: "D63031" };
+            case AttendanceStatus.WEEKEND: return { rgb: "495057" };
+            case AttendanceStatus.HOLIDAY: return { rgb: "004085" };
+            case AttendanceStatus.WORK_ON_HOLIDAY: return { rgb: "5A2D82" };
+            case AttendanceStatus.WORK_ON_WEEKEND: return { rgb: "4527A0" };
+            default: return { rgb: "000000" };
+        }
+    };
+
+    // Format header row
+    for (let col = 0; col < headers.length; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+        if (reportWs[cellAddress]) {
+            reportWs[cellAddress].s = {
+                font: { bold: true, color: { rgb: "FFFFFF" } },
+                fill: { fgColor: { rgb: "4472C4" } },
+                alignment: { horizontal: "center" }
+            };
+        }
     }
+
+    // Format data rows based on status
+    records.forEach((record, index) => {
+        const rowIndex = index + 1;
+        const fillColor = getStatusColor(record.status);
+        const fontColor = getFontColor(record.status);
+        
+        for (let col = 0; col < headers.length; col++) {
+            const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: col });
+            if (reportWs[cellAddress]) {
+                reportWs[cellAddress].s = {
+                    fill: fillColor,
+                    font: { 
+                        color: fontColor,
+                        bold: record.status === AttendanceStatus.ABSENT || 
+                              record.status === AttendanceStatus.WORK_ON_HOLIDAY ||
+                              record.status === AttendanceStatus.WORK_ON_WEEKEND
+                    },
+                    alignment: { 
+                        horizontal: col === 6 ? "left" : "center",
+                        wrapText: col === 6
+                    }
+                };
+            }
+        }
+    });
 
     // Add sheets to workbook
     XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
     XLSX.utils.book_append_sheet(wb, reportWs, 'Detailed Report');
 
-    // Generate filename with timestamp
+    // Generate filename
     const timestamp = new Date().toISOString().split('T')[0];
     const filename = `Attendance_Report_${employeeName.replace(/\s+/g, '_')}_${timestamp}.xlsx`;
     
-    // Write the file
-    XLSX.writeFile(wb, filename, { 
-        bookType: 'xlsx',
-        type: 'binary',
-        cellStyles: true,
-        sheetStubs: false
-    });
+    // Write file
+    XLSX.writeFile(wb, filename);
 };
